@@ -1105,4 +1105,29 @@ describe("Mon Transport CI — règles Firestore", function () {
     }));
   });
 
+
+  describe("Trajet partagé — profils et réservations", () => {
+    const DRIVER_UID="driver-ride-test", TRIP_ID="trip-ride-test", BOOKING_ID=TRIP_ID+"_"+CLIENT_UID;
+    const profileData=(uid,overrides={})=>({uid,nom:"Conducteur test",telephone:"0700000000",categorie:"particulier",statutVerification:"en_attente",documents:{permis:true,carteGrise:true,assurance:true},createdAt:Timestamp.now(),updatedAt:Timestamp.now(),...overrides});
+    const tripData=(overrides={})=>({conducteurUid:DRIVER_UID,conducteurNom:"Conducteur test",depart:"Yopougon",destination:"Plateau",dateTrajet:futureDate(24),heureDepart:"07:00",pointRencontre:"Carrefour test",placesDisponibles:1,tarifParPlace:2000,statut:"publie",createdAt:Timestamp.now(),updatedAt:Timestamp.now(),...overrides});
+    it("autorise le dépôt d’un dossier complet mais interdit au conducteur de s’approuver lui-même",async()=>{
+      const db=testEnv.authenticatedContext(DRIVER_UID).firestore();const {doc,setDoc,updateDoc,serverTimestamp}=require("firebase/firestore");
+      const ref=doc(db,"trajet_partage_profils",DRIVER_UID);
+      await assertSucceeds(setDoc(ref,{...profileData(DRIVER_UID),createdAt:serverTimestamp(),updatedAt:serverTimestamp()}));
+      await assertFails(updateDoc(ref,{statutVerification:"approuve",updatedAt:serverTimestamp()}));
+      const adminDb=testEnv.authenticatedContext(ADMIN_UID).firestore();
+      await assertSucceeds(updateDoc(doc(adminDb,"trajet_partage_profils",DRIVER_UID),{statutVerification:"approuve",updatedAt:serverTimestamp()}));
+    });
+    it("refuse un profil conducteur sans les trois justificatifs",async()=>{
+      const db=testEnv.authenticatedContext(DRIVER_UID).firestore();const {doc,setDoc,serverTimestamp}=require("firebase/firestore");
+      await assertFails(setDoc(doc(db,"trajet_partage_profils",DRIVER_UID),{...profileData(DRIVER_UID,{documents:{permis:true,carteGrise:false,assurance:false}}),createdAt:serverTimestamp(),updatedAt:serverTimestamp()}));
+    });
+    it("exige une confirmation atomique avec décrément de place pour accepter une réservation",async()=>{
+      await testEnv.withSecurityRulesDisabled(async context=>{const db=context.firestore();await db.doc("trajet_partage_profils/"+DRIVER_UID).set(profileData(DRIVER_UID,{statutVerification:"approuve"}));await db.doc("trajets_partages/"+TRIP_ID).set(tripData());await db.doc("reservations_trajets/"+BOOKING_ID).set({trajetId:TRIP_ID,conducteurUid:DRIVER_UID,passagerUid:CLIENT_UID,passagerNom:"Passager test",dateTrajet:futureDate(24),heureDepart:"07:00",depart:"Yopougon",destination:"Plateau",pointRencontre:"Carrefour test",tarifParPlace:2000,places:1,statut:"en_attente",createdAt:Timestamp.now(),updatedAt:Timestamp.now()})});
+      const driverDb=testEnv.authenticatedContext(DRIVER_UID).firestore();const {doc,writeBatch,serverTimestamp,updateDoc}=require("firebase/firestore");
+      await assertFails(updateDoc(doc(driverDb,"reservations_trajets",BOOKING_ID),{statut:"acceptee",updatedAt:serverTimestamp()}));
+      const batch=writeBatch(driverDb);batch.update(doc(driverDb,"trajets_partages",TRIP_ID),{placesDisponibles:0,statut:"complet",updatedAt:serverTimestamp()});batch.update(doc(driverDb,"reservations_trajets",BOOKING_ID),{statut:"acceptee",updatedAt:serverTimestamp()});await assertSucceeds(batch.commit());
+    });
+  });
+
 });
