@@ -21,5 +21,14 @@ service firebase.storage {
       allow update: if false;
       allow delete: if false;
     }
+    match /trajet_partage_documents/{uid}/{fileName} {
+      allow create: if resource == null
+        && request.auth != null && request.auth.uid == uid
+        && fileName.matches('^(permis|carteGrise|assurance)\\.(jpg|jpeg|png|webp|pdf)$')
+        && request.resource.size <= 8 * 1024 * 1024
+        && request.resource.contentType.matches('(image/(jpeg|png|webp)|application/pdf)');
+      allow read: if estAdmin();
+      allow update, delete: if false;
+    }
   }
 }

@@ -73,4 +73,13 @@ describe("Mon Quotidien CI — règles Firebase Storage",function(){
   await assertSucceeds(getBytes(ref(testEnv.authenticatedContext(ADMIN_UID).storage(),privatePath)));
   await assertSucceeds(getBytes(ref(testEnv.unauthenticatedContext().storage(),publicPath)));
  });
+
+ it("autorise le propriétaire à déposer les justificatifs du trajet partagé mais réserve leur lecture à l’administration",async()=>{
+  const path="trajet_partage_documents/"+OWNER_UID+"/permis.jpg";const owner=testEnv.authenticatedContext(OWNER_UID).storage();
+  await assertSucceeds(uploadBytes(ref(owner,path),jpeg,metadata));await assertFails(getBytes(ref(owner,path)));await assertFails(getBytes(ref(testEnv.authenticatedContext(OTHER_UID).storage(),path)));await assertSucceeds(getBytes(ref(testEnv.authenticatedContext(ADMIN_UID).storage(),path)));
+ });
+ it("refuse les formats non autorisés pour les justificatifs du trajet partagé",async()=>{
+  const storage=testEnv.authenticatedContext(OWNER_UID).storage();await assertFails(uploadBytes(ref(storage,"trajet_partage_documents/"+OWNER_UID+"/identite.txt"),new Uint8Array([1,2,3]),{contentType:"text/plain"}));
+ });
+
 });
