@@ -83,3 +83,6 @@ window.MON_TRANSPORT_CI_ROUTES = [
     ]
   }
 ];
+
+// Chargement isolé du module Trajet partagé.
+(function(){var s=document.createElement('script');s.src='./trajet-partage.js';s.defer=true;s.onerror=function(){console.error('Module Trajet partagé indisponible.');};document.head.appendChild(s);})();
