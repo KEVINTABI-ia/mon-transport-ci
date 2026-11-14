@@ -1507,6 +1507,62 @@ service cloud.firestore {
       allow update, delete: if estAdmin();
     }
 
+
+    // Trajet partagé : profils soumis à validation, trajets publiés et réservations privées.
+    match /trajet_partage_profils/{uid} {
+      allow create: if estConnecte() && request.auth.uid == uid
+        && request.resource.data.keys().hasOnly(["uid","nom","telephone","categorie","statutVerification","createdAt","updatedAt"])
+        && request.resource.data.keys().hasAll(["uid","nom","telephone","categorie","statutVerification","createdAt","updatedAt"])
+        && request.resource.data.uid == uid
+        && request.resource.data.nom is string && request.resource.data.nom.size() >= 2 && request.resource.data.nom.size() <= 100
+        && request.resource.data.telephone is string && request.resource.data.telephone.size() >= 8 && request.resource.data.telephone.size() <= 24
+        && request.resource.data.categorie in ["particulier","entreprise"]
+        && request.resource.data.statutVerification == "en_attente"
+        && request.resource.data.createdAt == request.time && request.resource.data.updatedAt == request.time;
+      allow read: if estAdmin() || (estConnecte() && request.auth.uid == uid);
+      allow update: if estAdmin() || (estConnecte() && request.auth.uid == uid
+        && request.resource.data.diff(resource.data).affectedKeys().hasOnly(["nom","telephone","categorie","updatedAt"])
+        && request.resource.data.statutVerification == resource.data.statutVerification
+        && request.resource.data.uid == resource.data.uid);
+      allow delete: if estAdmin();
+    }
+    match /trajets_partages/{trajetId} {
+      allow create: if estConnecte()
+        && request.resource.data.conducteurUid == request.auth.uid
+        && exists(/databases/$(database)/documents/trajet_partage_profils/$(request.auth.uid))
+        && get(/databases/$(database)/documents/trajet_partage_profils/$(request.auth.uid)).data.statutVerification == "approuve"
+        && request.resource.data.keys().hasOnly(["conducteurUid","conducteurNom","depart","destination","dateTrajet","heureDepart","pointRencontre","placesDisponibles","tarifParPlace","statut","createdAt","updatedAt"])
+        && request.resource.data.dateTrajet is timestamp && request.resource.data.dateTrajet > request.time
+        && request.resource.data.placesDisponibles is int && request.resource.data.placesDisponibles >= 1 && request.resource.data.placesDisponibles <= 7
+        && request.resource.data.tarifParPlace is int && request.resource.data.tarifParPlace >= 100 && request.resource.data.tarifParPlace <= 100000
+        && request.resource.data.statut == "publie"
+        && request.resource.data.createdAt == request.time && request.resource.data.updatedAt == request.time;
+      allow read: if estAdmin() || (estConnecte() && resource.data.conducteurUid == request.auth.uid) || resource.data.statut == "publie";
+      allow update: if estAdmin() || (estConnecte() && resource.data.conducteurUid == request.auth.uid
+        && request.resource.data.diff(resource.data).affectedKeys().hasOnly(["placesDisponibles","statut","pointRencontre","updatedAt"]));
+      allow delete: if estAdmin() || (estConnecte() && resource.data.conducteurUid == request.auth.uid);
+    }
+    match /reservations_trajets/{reservationId} {
+      allow create: if estConnecte()
+        && request.resource.data.passagerUid == request.auth.uid
+        && request.resource.data.conducteurUid is string && request.resource.data.conducteurUid != request.auth.uid
+        && request.resource.data.keys().hasOnly(["trajetId","conducteurUid","passagerUid","passagerNom","dateTrajet","heureDepart","depart","destination","pointRencontre","tarifParPlace","places","commissionIndicative","statut","createdAt","updatedAt"])
+        && exists(/databases/$(database)/documents/trajets_partages/$(request.resource.data.trajetId))
+        && get(/databases/$(database)/documents/trajets_partages/$(request.resource.data.trajetId)).data.conducteurUid == request.resource.data.conducteurUid
+        && get(/databases/$(database)/documents/trajets_partages/$(request.resource.data.trajetId)).data.statut == "publie"
+        && get(/databases/$(database)/documents/trajets_partages/$(request.resource.data.trajetId)).data.placesDisponibles >= request.resource.data.places
+        && request.resource.data.dateTrajet is timestamp && request.resource.data.dateTrajet > request.time
+        && request.resource.data.places == 1 && request.resource.data.statut == "en_attente"
+        && request.resource.data.createdAt == request.time && request.resource.data.updatedAt == request.time;
+      allow read: if estAdmin() || (estConnecte() && (resource.data.passagerUid == request.auth.uid || resource.data.conducteurUid == request.auth.uid));
+      allow update: if estAdmin() || (estConnecte()
+        && (resource.data.passagerUid == request.auth.uid || resource.data.conducteurUid == request.auth.uid)
+        && request.resource.data.diff(resource.data).affectedKeys().hasOnly(["statut","updatedAt"])
+        && request.resource.data.updatedAt == request.time
+        && request.resource.data.statut in ["acceptee","refusee","annulee"]);
+      allow delete: if estAdmin();
+    }
+
     match /{document=**} {
       allow read, write: if false;
     }
