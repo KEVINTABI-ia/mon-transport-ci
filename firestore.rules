@@ -1556,10 +1556,10 @@ service cloud.firestore {
         && request.resource.data.createdAt == request.time && request.resource.data.updatedAt == request.time;
       allow read: if estAdmin() || (estConnecte() && (resource.data.passagerUid == request.auth.uid || resource.data.conducteurUid == request.auth.uid));
       allow update: if estAdmin() || (estConnecte()
-        && (resource.data.passagerUid == request.auth.uid || resource.data.conducteurUid == request.auth.uid)
         && request.resource.data.diff(resource.data).affectedKeys().hasOnly(["statut","updatedAt"])
         && request.resource.data.updatedAt == request.time
-        && request.resource.data.statut in ["acceptee","refusee","annulee"]);
+        && ((resource.data.conducteurUid == request.auth.uid && request.resource.data.statut in ["acceptee","refusee"])
+          || (resource.data.passagerUid == request.auth.uid && request.resource.data.statut == "annulee")));
       allow delete: if estAdmin();
     }
 
