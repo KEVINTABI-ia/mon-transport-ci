@@ -23,10 +23,11 @@ function saveProfile(e){
  var nom=$('mqciTPNom').value.trim(),tel=$('mqciTPTel').value.trim();
  var entries=[['permis','mqciTPPermis'],['carteGrise','mqciTPCarteGrise'],['assurance','mqciTPAssurance']];
  if(nom.length<2||tel.length<8||entries.some(function(x){return !$ (x[1]).files[0]})){msg('Complétez vos coordonnées et les trois justificatifs.',true);return}
+ var invalid=entries.some(function(x){var file=$(x[1]).files[0];return file.size>8*1024*1024||!(/^(image\/(jpeg|png|webp)|application\/pdf)$/.test(file.type))});
+ if(invalid){msg('Chaque justificatif doit être une image JPEG, PNG, WebP ou un PDF de 8 Mo maximum.',true);return}
  var uid=user().uid,docs={permis:true,carteGrise:true,assurance:true};
  var uploads=entries.map(function(x){
   var file=$(x[1]).files[0];
-  if(file.size>8*1024*1024||!(/^(image\/(jpeg|png|webp)|application\/pdf)$/.test(file.type)))throw Error('Fichier non autorisé ou supérieur à 8 Mo');
   var ext=file.type==='application/pdf'?'pdf':file.type.split('/')[1];
   return storage().ref('trajet_partage_documents/'+uid+'/'+x[0]+'.'+ext).put(file,{contentType:file.type});
  });
